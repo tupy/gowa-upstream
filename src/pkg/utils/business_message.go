@@ -225,6 +225,10 @@ func nativeFlowAsButton(name, paramsJSON, fallbackID string) BusinessButton {
 		return BusinessButton{Type: "call", Text: text, Phone: params.PhoneNumber}
 	case "cta_copy":
 		return BusinessButton{Type: "copy", Text: text, Code: params.Copy}
+	case "review_and_pay", "payment_info":
+		if code := nativeFlowPixCode(paramsJSON); code != "" {
+			return BusinessButton{Type: "copy", Text: "Pix", Code: code}
+		}
 	}
 	button := BusinessButton{Type: name, Text: text, ID: cmp.Or(params.ID, fallbackID)}
 	for _, section := range params.Sections {
@@ -455,9 +459,9 @@ func interactiveHeaderMediaCaption(header *waE2E.InteractiveMessage_Header) stri
 
 // nativeFlowButtonParams covers the fields used by the button types rendered
 // specially (cta_url, cta_call, cta_copy), plus the id and single_select rows
-// that nativeFlowAsButton exposes to webhooks. Other button names (e.g.
-// review_and_pay) fall through to displaying the raw button name, since their
-// params carry structured payment data that doesn't reduce to a single line.
+// that nativeFlowAsButton exposes to webhooks. Payment buttons (review_and_pay,
+// payment_info) are decoded separately by nativeFlowPixCode; other button
+// names fall through to displaying the raw button name.
 type nativeFlowButtonParams struct {
 	DisplayText string `json:"display_text"`
 	URL         string `json:"url"`
@@ -511,6 +515,10 @@ func formatNativeFlowButton(button *waE2E.InteractiveMessage_NativeFlowMessage_N
 		if params.Copy != "" {
 			return fmt.Sprintf("📋 %s: %s", label, params.Copy)
 		}
+	case "review_and_pay", "payment_info":
+		if code := nativeFlowPixCode(button.GetButtonParamsJSON()); code != "" {
+			return fmt.Sprintf("📋 Pix: %s", code)
+		}
 	}
 
 	label := params.DisplayText
@@ -521,4 +529,40 @@ func formatNativeFlowButton(button *waE2E.InteractiveMessage_NativeFlowMessage_N
 		return fmt.Sprintf("[%s] %s", name, label)
 	}
 	return fmt.Sprintf("[%s]", name)
+}
+
+// nativeFlowPaymentParams is the subset of a review_and_pay / payment_info
+// button's params needed to surface a Brazilian Pix payment: each
+// payment_settings entry may carry a dynamic (EMV "copia e cola") code or a
+// static Pix key.
+type nativeFlowPaymentParams struct {
+	PaymentSettings []struct {
+		PixDynamicCode struct {
+			Code string `json:"code"`
+		} `json:"pix_dynamic_code"`
+		PixStaticCode struct {
+			Key string `json:"key"`
+		} `json:"pix_static_code"`
+	} `json:"payment_settings"`
+}
+
+// nativeFlowPixCode returns the first non-empty pix_dynamic_code.code in the
+// payment_settings of paramsJSON, else the first non-empty
+// pix_static_code.key, else "".
+func nativeFlowPixCode(paramsJSON string) string {
+	var params nativeFlowPaymentParams
+	if err := json.Unmarshal([]byte(paramsJSON), &params); err != nil {
+		return ""
+	}
+	for _, setting := range params.PaymentSettings {
+		if code := strings.TrimSpace(setting.PixDynamicCode.Code); code != "" {
+			return code
+		}
+	}
+	for _, setting := range params.PaymentSettings {
+		if key := strings.TrimSpace(setting.PixStaticCode.Key); key != "" {
+			return key
+		}
+	}
+	return ""
 }

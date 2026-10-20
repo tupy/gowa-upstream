@@ -448,4 +448,86 @@ func TestBusinessMessageLinesFallsBackToButtonType(t *testing.T) {
 	if got := businessMessageLines(&BusinessMessage{Buttons: []BusinessButton{{Type: "review_and_pay"}}}); got != "[review_and_pay]" {
 		t.Fatalf("unexpected lines %q", got)
 	}
+	if got := businessMessageLines(&BusinessMessage{Buttons: []BusinessButton{{Type: "copy", Text: "Pix", Code: testPixCode}}}); got != "📋 Pix: "+testPixCode {
+		t.Fatalf("unexpected lines %q", got)
+	}
+}
+
+// Fake Pix EMV "copia e cola" code; shaped like a real one, not a real payment.
+const testPixCode = "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426614174000520400005303986540515.005802BR5913ULTRAGAZ6009SAO PAULO62070503***6304ABCD"
+
+// Shaped like the review_and_pay buttonParamsJSON a Brazilian business sends.
+const testReviewAndPayParams = `{
+  "reference_id": "test-ref-1",
+  "type": "digital-goods",
+  "payment_type": "br",
+  "payment_settings": [{
+    "type": "pix_dynamic_code",
+    "pix_dynamic_code": {
+      "code": "` + testPixCode + `",
+      "merchant_name": "ULTRAGAZ",
+      "key_type": "CNPJ",
+      "key": "12345678000199"
+    }
+  }],
+  "currency": "BRL",
+  "total_amount": {"value": 15000, "offset": 100}
+}`
+
+const testStaticPixParams = `{"payment_type":"br","payment_settings":[{"type":"pix_static_code","pix_static_code":{"merchant_name":"ULTRAGAZ","key_type":"CNPJ","key":"12345678000199"}}],"currency":"BRL"}`
+
+func paymentInteractiveMessage(name, params string) *waE2E.Message {
+	return &waE2E.Message{InteractiveMessage: &waE2E.InteractiveMessage{
+		Body: &waE2E.InteractiveMessage_Body{Text: proto.String("Seu pedido")},
+		InteractiveMessage: &waE2E.InteractiveMessage_NativeFlowMessage_{NativeFlowMessage: &waE2E.InteractiveMessage_NativeFlowMessage{
+			Buttons: []*waE2E.InteractiveMessage_NativeFlowMessage_NativeFlowButton{{
+				Name: proto.String(name), ButtonParamsJSON: proto.String(params),
+			}},
+		}},
+	}}
+}
+
+func TestExtractMessageTextPixPaymentButtons(t *testing.T) {
+	tests := []struct {
+		name, button, params, want string
+	}{
+		{"ReviewAndPayDynamicCode", "review_and_pay", testReviewAndPayParams, "Seu pedido\n📋 Pix: " + testPixCode},
+		{"PaymentInfoDynamicCode", "payment_info", testReviewAndPayParams, "Seu pedido\n📋 Pix: " + testPixCode},
+		{"ReviewAndPayStaticKey", "review_and_pay", testStaticPixParams, "Seu pedido\n📋 Pix: 12345678000199"},
+		{"ReviewAndPayEmptySettingsFallsBack", "review_and_pay", `{"payment_type":"br","payment_settings":[]}`, "Seu pedido\n[review_and_pay]"},
+		{"PaymentInfoInvalidJSONFallsBack", "payment_info", `not json`, "Seu pedido\n[payment_info]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := paymentInteractiveMessage(tt.button, tt.params)
+			if got := FormatInteractiveMessageSummary(msg.GetInteractiveMessage()); got != tt.want {
+				t.Fatalf("FormatInteractiveMessageSummary() = %q, want %q", got, tt.want)
+			}
+			if got := ExtractMessageTextFromProto(msg); got != tt.want {
+				t.Fatalf("ExtractMessageTextFromProto() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNativeFlowAsButtonPixPayment(t *testing.T) {
+	want := BusinessButton{Type: "copy", Text: "Pix", Code: testPixCode}
+	for _, name := range []string{"review_and_pay", "payment_info"} {
+		if got := nativeFlowAsButton(name, testReviewAndPayParams, ""); !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: button = %+v, want %+v", name, got, want)
+		}
+	}
+	if got, want := nativeFlowAsButton("review_and_pay", testStaticPixParams, ""), (BusinessButton{Type: "copy", Text: "Pix", Code: "12345678000199"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("static key: button = %+v, want %+v", got, want)
+	}
+	if got, want := nativeFlowAsButton("review_and_pay", `{"payment_settings":[]}`, ""), (BusinessButton{Type: "review_and_pay"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("fallback: button = %+v, want %+v", got, want)
+	}
+}
+
+func TestNativeFlowPixCodePrefersDynamicOverStatic(t *testing.T) {
+	params := `{"payment_settings":[{"pix_static_code":{"key":"static-key"}},{"pix_dynamic_code":{"code":"  "}},{"pix_dynamic_code":{"code":"dyn-code"}}]}`
+	if got := nativeFlowPixCode(params); got != "dyn-code" {
+		t.Fatalf("nativeFlowPixCode() = %q, want dyn-code", got)
+	}
 }
