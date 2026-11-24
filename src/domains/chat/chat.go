@@ -1,5 +1,7 @@
 package chat
 
+import "encoding/json"
+
 // Request and Response structures for chat operations
 
 type ListChatsRequest struct {
@@ -70,11 +72,14 @@ type MessageInfo struct {
 	// ContextMetadata is a JSON string containing replied_to_id when this message is a reply.
 	ContextMetadata  string `json:"context_metadata,omitempty"`
 	ReferralMetadata string `json:"referral_metadata,omitempty"`
-	Filename         string `json:"filename"`
-	URL              string `json:"url"`
-	FileLength       uint64 `json:"file_length"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+	// NativeFlow is the raw WhatsApp Flow capture for a native-flow message or
+	// reply. JSON object; omitted when the message is not a native flow.
+	NativeFlow json.RawMessage `json:"native_flow,omitempty"`
+	Filename   string          `json:"filename"`
+	URL        string          `json:"url"`
+	FileLength uint64          `json:"file_length"`
+	CreatedAt  string          `json:"created_at"`
+	UpdatedAt  string          `json:"updated_at"`
 }
 
 type PaginationResponse struct {

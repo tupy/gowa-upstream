@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
@@ -207,6 +209,7 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 			CallMetadata:      message.CallMetadata,
 			ContextMetadata:   message.ContextMetadata,
 			ReferralMetadata:  message.ReferralMetadata,
+			NativeFlow:        nativeFlowPayload(message.NativeFlow),
 			Filename:          message.Filename,
 			URL:               message.URL,
 			FileLength:        message.FileLength,
@@ -258,6 +261,16 @@ func (service serviceChat) GetChatMessages(ctx context.Context, request domainCh
 	}).Info("Retrieved chat messages successfully")
 
 	return response, nil
+}
+
+// nativeFlowPayload exposes a stored Flow capture as a JSON object. Empty and
+// invalid values are omitted so one bad row cannot break chat history.
+func nativeFlowPayload(raw string) json.RawMessage {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !json.Valid([]byte(raw)) {
+		return nil
+	}
+	return json.RawMessage(raw)
 }
 
 func deviceIDFromContext(ctx context.Context) string {

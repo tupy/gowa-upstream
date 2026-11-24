@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	domainChat "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chat"
@@ -122,6 +123,37 @@ func TestHandleChatDispatch(t *testing.T) {
 		assert.Contains(t, text.Text, "msg-123")
 		assert.Contains(t, text.Text, "hello world")
 		assert.NotNil(t, res.StructuredContent)
+	})
+
+	t.Run("get_messages returns native_flow", func(t *testing.T) {
+		flow := json.RawMessage(`{"kind":"response","body":"Sent","name":"galaxy_message","params_json":"{\"cpf\":\"00000000000\",\"flow_token\":\"tok_exemplo\"}","version":3,"replied_to_id":"flow-1"}`)
+		cs, us := &stubChatService{
+			msgResp: domainChat.GetChatMessagesResponse{
+				Data: []domainChat.MessageInfo{{
+					ID:         "flow-reply",
+					Content:    "Sent",
+					IsFromMe:   true,
+					NativeFlow: flow,
+				}},
+			},
+		}, &stubUserService{}
+		h := InitMcpChat(cs, us, &stubResolver{})
+		res, err := h.handleChat(deviceCtx(), callReq(map[string]any{
+			"action": "get_messages", "chat_jid": "5571999000111@s.whatsapp.net",
+		}))
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.Content)
+		text, ok := mcpg.AsTextContent(res.Content[0])
+		require.True(t, ok)
+		assert.Contains(t, text.Text, `"native_flow"`)
+		assert.Contains(t, text.Text, "galaxy_message")
+		assert.Contains(t, text.Text, "tok_exemplo")
+		assert.Contains(t, text.Text, `"content":"Sent"`)
+		encoded, err := json.Marshal(res.StructuredContent)
+		require.NoError(t, err)
+		assert.Contains(t, string(encoded), `"native_flow"`)
+		assert.Contains(t, string(encoded), "tok_exemplo")
 	})
 
 	t.Run("archive", func(t *testing.T) {
