@@ -601,6 +601,12 @@ func buildOtherMessageTypes(msg *waE2E.Message, payload map[string]any) {
 		// turns *waE2E.InteractiveMessage into a generic map[string]any.
 		payload["interactive"] = utils.FormatInteractiveMessageSummary(interactiveMessage)
 	}
+
+	// Raw Flow params can include a flow_token. Keep them on the payload only;
+	// do not log this value.
+	if flow := utils.ExtractNativeFlow(msg); flow != nil {
+		payload["native_flow"] = *flow
+	}
 }
 
 func buildWebhookContactPayload(contact *waE2E.ContactMessage) webhookContactPayload {

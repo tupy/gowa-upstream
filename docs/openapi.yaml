@@ -5905,6 +5905,22 @@ components:
           type: string
           example: '{"replied_to_id":"AC625C65EA7143E71D784176C4A90A93"}'
           description: JSON string containing the replied-to message ID when reply context is known. Captured from live, sent, and history-sync messages. Omitted when no reply context is available, including older stored rows until they are reingested with context.
+        native_flow:
+          type: object
+          additionalProperties: true
+          description: >-
+            Raw WhatsApp Flow capture for a native-flow message (`kind` = `message`) or reply
+            (`kind` = `response`). `button_params_json`, `message_params_json` and `params_json`
+            are the original JSON strings. A reply includes `name`, `version`, `body` and
+            `replied_to_id` (the quoted form message). Omitted when the message is not a native flow.
+            The same object is returned by MCP `get_messages` and by the message webhook as `native_flow`.
+          example:
+            kind: response
+            body: Sent
+            name: galaxy_message
+            params_json: '{"cpf":"00000000000","unidade_consumidora":"123456789"}'
+            version: 3
+            replied_to_id: 3EB0FORMULARIO0001
         filename:
           type: string
           example: 'photo.jpg'

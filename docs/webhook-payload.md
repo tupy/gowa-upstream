@@ -1331,6 +1331,44 @@ A tap on a list row, a button, a template quick reply or a native-flow button. `
 - `kind` is `list`, `buttons`, `template` or `interactive` (native-flow replies, whose `selected_id` comes from the reply's `id` param).
 - `body` is the selected text, falling back to `description`. Recent clients often send replies with only the id; `body` is then `Selected option <selected_id>`, or `Selection message` when there is nothing at all.
 
+### Native Flow (WhatsApp Flow)
+
+Optional `native_flow` object on a native-flow message or reply. Omitted for every other message. `body`, `interactive` and `selection` stay as they are (`[galaxy_message]`, `Sent`, and the existing selection object). `button_params_json`, `message_params_json` and `params_json` are the original JSON strings, not decoded objects, so unknown fields and a `flow_token` are kept verbatim.
+
+Received Flow:
+
+```json
+"native_flow": {
+  "kind": "message",
+  "header": "Neoenergia Coelba",
+  "subtitle": "Atualização cadastral",
+  "body": "Toque no botão para informar seus dados.",
+  "footer": "Mensagem automática",
+  "message_params_json": "{\"flow_id\":\"999000111\",\"flow_cta\":\"Informar dados\"}",
+  "buttons": [
+    {
+      "name": "galaxy_message",
+      "button_params_json": "{\"flow_id\":\"999000111\",\"flow_token\":\"tok_exemplo\",\"flow_cta\":\"Informar dados\",\"flow_action\":\"navigate\"}"
+    }
+  ]
+}
+```
+
+Reply sent from the phone. `replied_to_id` is the quoted form message. The same id is also stored in chat history `context_metadata`.
+
+```json
+"native_flow": {
+  "kind": "response",
+  "body": "Sent",
+  "name": "galaxy_message",
+  "params_json": "{\"cpf\":\"00000000000\",\"unidade_consumidora\":\"123456789\"}",
+  "version": 3,
+  "replied_to_id": "3EB0FORMULARIO0001"
+}
+```
+
+`header_caption` is present when the Flow header media has a caption. `version` is present only when the reply sets it, including `0`. `replied_to_id` is also set on a received Flow when that message quotes another one.
+
 ### Location Message
 
 ```json
